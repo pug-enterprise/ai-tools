@@ -49,7 +49,8 @@ class OpenArtVideoGenerator:
         with sync_playwright() as pw:
             ctx = pw.chromium.launch_persistent_context(
                 str(SESSION_DIR),
-                headless=False,   # keep visible so you can intervene if needed
+                headless=False,
+                channel="chrome",   # use real Chrome, not bundled Chromium
             )
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
@@ -105,6 +106,7 @@ def login_interactively():
         ctx = pw.chromium.launch_persistent_context(
             str(SESSION_DIR),
             headless=False,
+            channel="chrome",   # use real Chrome, not bundled Chromium
         )
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         page.goto("https://openart.ai/signin", wait_until="networkidle")
