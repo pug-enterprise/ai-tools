@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Authorizing…</title></head>
+<body>
+<p>Completing authorization, please wait…</p>
+<script>
+  // Forward the OAuth params from TikTok to the local CLI server
+  const params = window.location.search;
+  window.location.href = "http://localhost:8765/callback" + params;
+</script>
+</body>
+</html>

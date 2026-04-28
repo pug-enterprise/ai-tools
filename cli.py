@@ -133,7 +133,7 @@ def _tiktok_oauth():
     state = secrets.token_urlsafe(16)
 
     scopes = "video.publish,video.upload"
-    redirect_uri = "http://localhost:8765/callback"
+    redirect_uri = "https://pug-enterprise.github.io/ai-tools/callback.html"
 
     params = {
         "client_key": client_key,
