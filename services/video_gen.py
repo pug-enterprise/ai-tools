@@ -92,70 +92,62 @@ class OpenArtVideoGenerator:
         )
 
 
+CHROME_PROFILE = Path.home() / "Library/Application Support/Google/Chrome/Default"
+
+
 def login_interactively():
     """
-    Grab Google + OpenArt.ai cookies from your real Chrome profile and
-    inject them into a Playwright session. No sign-in prompt needed.
-    Called by `python cli.py openart-login`.
+    Open Playwright using your real Chrome profile (already logged into OpenArt.ai),
+    navigate to openart.ai to confirm the session, then export and save the cookies
+    to SESSION_DIR for future headless runs.
 
-    Chrome must not be running when this is called (close it first).
+    Chrome must be fully quit before running this (Cmd+Q).
     """
     from playwright.sync_api import sync_playwright
-    import browser_cookie3
 
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("\n  Close Chrome completely before continuing (Cmd+Q, not just the window).")
+    print("\n  Fully quit Chrome first (Cmd+Q — not just close the window).")
     input("  Press Enter when Chrome is closed > ")
 
-    # Pull cookies from Chrome for Google and OpenArt.ai
-    log.info("Reading cookies from Chrome profile…")
-    chrome_cookies = list(browser_cookie3.chrome(domain_name=".google.com")) + \
-                     list(browser_cookie3.chrome(domain_name="openart.ai"))
+    log.info("Launching with your real Chrome profile…")
 
-    log.info(f"  Found {len(chrome_cookies)} cookies")
+    with sync_playwright() as pw:
+        # Use the real Chrome profile — already logged in everywhere
+        ctx = pw.chromium.launch_persistent_context(
+            str(CHROME_PROFILE),
+            headless=False,
+            channel="chrome",
+            args=["--profile-directory=Default"],
+        )
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.goto("https://openart.ai/suite/home", wait_until="networkidle")
 
-    # Start a Playwright session, inject cookies, navigate to OpenArt.ai
+        if "signin" in page.url or "login" in page.url:
+            print("\n  Not logged in — sign in manually in the browser, then press Enter.")
+            input("  Press Enter when you're on the OpenArt.ai home page > ")
+
+        print(f"\n  Logged in at: {page.url}")
+
+        # Export cookies from this context and save to SESSION_DIR
+        cookies = ctx.cookies()
+        ctx.close()
+
+    # Now start a fresh persistent context in SESSION_DIR and inject the cookies
+    log.info(f"Saving session to {SESSION_DIR}…")
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
             str(SESSION_DIR),
             headless=False,
             channel="chrome",
         )
+        ctx.add_cookies(cookies)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-
-        # Inject cookies before navigating
-        playwright_cookies = []
-        for c in chrome_cookies:
-            try:
-                playwright_cookies.append({
-                    "name": c.name,
-                    "value": c.value,
-                    "domain": c.domain,
-                    "path": c.path,
-                    "secure": bool(c.secure),
-                    "httpOnly": False,
-                    "sameSite": "None",
-                })
-            except Exception:
-                pass
-
-        if playwright_cookies:
-            ctx.add_cookies(playwright_cookies)
-            log.info(f"  Injected {len(playwright_cookies)} cookies")
-
-        page.goto("https://openart.ai", wait_until="networkidle")
-
-        if "signin" in page.url or "login" in page.url:
-            print("\n  Not logged in automatically — sign in manually in the browser window.")
-            print("  Use 'Continue with Google', complete the flow, then press Enter.")
-            input("  Press Enter when you're on the OpenArt.ai home page > ")
-        else:
-            print(f"\n  Logged in successfully ({page.url})")
-
+        page.goto("https://openart.ai/suite/home", wait_until="networkidle")
+        log.info(f"  Session verified at: {page.url}")
         ctx.close()
 
-    log.info(f"Session saved to {SESSION_DIR}")
+    log.info("Session saved. You can now run the pipeline.")
 
 
 def _session_exists() -> bool:
