@@ -103,6 +103,14 @@ def retry(article_id: str):
     click.echo(f"Reset {article.title!r} → status=new")
 
 
+@cli.command("openart-login")
+def openart_login():
+    """Open a browser to log into OpenArt.ai via Google SSO and save the session."""
+    from services.video_gen import login_interactively
+    login_interactively()
+    click.echo("Session saved. You won't need to log in again unless the session expires.")
+
+
 @cli.command("auth")
 @click.argument("service", type=click.Choice(["tiktok"]))
 def auth(service: str):

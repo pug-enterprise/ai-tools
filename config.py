@@ -10,10 +10,6 @@ class Settings(BaseSettings):
     tiktok_access_token: str = ""
     tiktok_post_mode: str = "draft"       # draft | direct
 
-    # OpenArt.ai
-    openart_email: str = ""
-    openart_password: str = ""
-
     # Claude CLI
     claude_cli_path: str = "claude"
 
