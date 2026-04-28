@@ -47,19 +47,20 @@ class OpenArtVideoGenerator:
         log.info(f"Starting OpenArt.ai video generation (job={job_id})")
 
         with sync_playwright() as pw:
-            ctx = pw.chromium.launch_persistent_context(
-                str(SESSION_DIR),
-                headless=False,
-                channel="chrome",   # use real Chrome, not bundled Chromium
-            )
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            import json
+            browser = pw.chromium.launch(headless=False, channel="chrome")
+            ctx = browser.new_context()
+            ctx.add_cookies(json.loads(COOKIES_FILE.read_text()))
+
+            page = ctx.new_page()
 
             # ── Navigate to story creator ──────────────────────────────────
             page.goto(STORY_URL, wait_until="networkidle")
 
-            # If redirected to login, session has expired
+            # If redirected to login, cookies have expired
             if "signin" in page.url or "login" in page.url:
                 ctx.close()
+                browser.close()
                 raise RuntimeError(
                     "OpenArt.ai session expired. Run: python cli.py openart-login"
                 )
@@ -79,6 +80,7 @@ class OpenArtVideoGenerator:
             video_url = _wait_for_video(page, POLL_TIMEOUT, POLL_INTERVAL)
 
             ctx.close()
+            browser.close()
 
         log.info(f"Video ready: {video_url}")
         return VideoJob(
@@ -92,66 +94,55 @@ class OpenArtVideoGenerator:
         )
 
 
-CHROME_PROFILE = Path.home() / "Library/Application Support/Google/Chrome/Default"
+COOKIES_FILE = SESSION_DIR / "cookies.json"
 
 
 def login_interactively():
     """
-    Open Playwright using your real Chrome profile (already logged into OpenArt.ai),
-    navigate to openart.ai to confirm the session, then export and save the cookies
-    to SESSION_DIR for future headless runs.
+    Read OpenArt.ai cookies directly from your real Chrome profile
+    (no browser automation needed — you're already logged in there).
 
-    Chrome must be fully quit before running this (Cmd+Q).
+    Chrome must be fully quit first (Cmd+Q) so the database isn't locked.
     """
-    from playwright.sync_api import sync_playwright
+    import json
+    import browser_cookie3
 
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
     print("\n  Fully quit Chrome first (Cmd+Q — not just close the window).")
     input("  Press Enter when Chrome is closed > ")
 
-    log.info("Launching with your real Chrome profile…")
+    log.info("Reading OpenArt.ai cookies from Chrome…")
+    try:
+        raw = list(browser_cookie3.chrome(domain_name="openart.ai"))
+    except Exception as e:
+        raise RuntimeError(f"Could not read Chrome cookies: {e}")
 
-    with sync_playwright() as pw:
-        # Use the real Chrome profile — already logged in everywhere
-        ctx = pw.chromium.launch_persistent_context(
-            str(CHROME_PROFILE),
-            headless=False,
-            channel="chrome",
-            args=["--profile-directory=Default"],
+    if not raw:
+        raise RuntimeError(
+            "No openart.ai cookies found in Chrome. "
+            "Make sure you're logged into openart.ai in Chrome before running this."
         )
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto("https://openart.ai/suite/home", wait_until="networkidle")
 
-        if "signin" in page.url or "login" in page.url:
-            print("\n  Not logged in — sign in manually in the browser, then press Enter.")
-            input("  Press Enter when you're on the OpenArt.ai home page > ")
+    cookies = []
+    for c in raw:
+        cookies.append({
+            "name": c.name,
+            "value": c.value,
+            "domain": c.domain if c.domain.startswith(".") else f".{c.domain}",
+            "path": c.path or "/",
+            "secure": bool(c.secure),
+            "httpOnly": False,
+            "sameSite": "None",
+        })
 
-        print(f"\n  Logged in at: {page.url}")
-
-        # Export cookies from this context and save to SESSION_DIR
-        cookies = ctx.cookies()
-        ctx.close()
-
-    # Now start a fresh persistent context in SESSION_DIR and inject the cookies
-    log.info(f"Saving session to {SESSION_DIR}…")
-    with sync_playwright() as pw:
-        ctx = pw.chromium.launch_persistent_context(
-            str(SESSION_DIR),
-            headless=False,
-            channel="chrome",
-        )
-        ctx.add_cookies(cookies)
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto("https://openart.ai/suite/home", wait_until="networkidle")
-        log.info(f"  Session verified at: {page.url}")
-        ctx.close()
-
-    log.info("Session saved. You can now run the pipeline.")
+    COOKIES_FILE.write_text(json.dumps(cookies, indent=2))
+    log.info(f"Saved {len(cookies)} cookies to {COOKIES_FILE}")
+    print(f"\n  Done — {len(cookies)} cookies saved. You can now run the pipeline.")
 
 
 def _session_exists() -> bool:
-    return SESSION_DIR.exists() and any(SESSION_DIR.iterdir())
+    return COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0
 
 
 def _wait_for_video(page, timeout: int, interval: int) -> str:
