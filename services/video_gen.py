@@ -94,26 +94,64 @@ class OpenArtVideoGenerator:
 
 def login_interactively():
     """
-    Open a headed browser, let the user log in via Google SSO,
-    then save the session. Called by `python cli.py openart-login`.
+    Grab Google + OpenArt.ai cookies from your real Chrome profile and
+    inject them into a Playwright session. No sign-in prompt needed.
+    Called by `python cli.py openart-login`.
+
+    Chrome must not be running when this is called (close it first).
     """
     from playwright.sync_api import sync_playwright
+    import browser_cookie3
 
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    log.info("Opening browser — log into OpenArt.ai via Google SSO, then close the browser.")
 
+    print("\n  Close Chrome completely before continuing (Cmd+Q, not just the window).")
+    input("  Press Enter when Chrome is closed > ")
+
+    # Pull cookies from Chrome for Google and OpenArt.ai
+    log.info("Reading cookies from Chrome profile…")
+    chrome_cookies = list(browser_cookie3.chrome(domain_name=".google.com")) + \
+                     list(browser_cookie3.chrome(domain_name="openart.ai"))
+
+    log.info(f"  Found {len(chrome_cookies)} cookies")
+
+    # Start a Playwright session, inject cookies, navigate to OpenArt.ai
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
             str(SESSION_DIR),
             headless=False,
-            channel="chrome",   # use real Chrome, not bundled Chromium
+            channel="chrome",
         )
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto("https://openart.ai/signin", wait_until="networkidle")
 
-        print("\n  Log into OpenArt.ai in the browser window (use 'Continue with Google').")
-        print("  Once you're on the OpenArt.ai home page, press Enter here to save the session.")
-        input("  Press Enter when logged in > ")
+        # Inject cookies before navigating
+        playwright_cookies = []
+        for c in chrome_cookies:
+            try:
+                playwright_cookies.append({
+                    "name": c.name,
+                    "value": c.value,
+                    "domain": c.domain,
+                    "path": c.path,
+                    "secure": bool(c.secure),
+                    "httpOnly": False,
+                    "sameSite": "None",
+                })
+            except Exception:
+                pass
+
+        if playwright_cookies:
+            ctx.add_cookies(playwright_cookies)
+            log.info(f"  Injected {len(playwright_cookies)} cookies")
+
+        page.goto("https://openart.ai", wait_until="networkidle")
+
+        if "signin" in page.url or "login" in page.url:
+            print("\n  Not logged in automatically — sign in manually in the browser window.")
+            print("  Use 'Continue with Google', complete the flow, then press Enter.")
+            input("  Press Enter when you're on the OpenArt.ai home page > ")
+        else:
+            print(f"\n  Logged in successfully ({page.url})")
 
         ctx.close()
 
