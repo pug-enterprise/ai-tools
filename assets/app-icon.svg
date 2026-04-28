@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="#0f0f0f"/>
+
+  <!-- Glow -->
+  <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#58a6ff" stop-opacity="0.15"/>
+    <stop offset="100%" stop-color="#0f0f0f" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="512" height="512" rx="96" fill="url(#glow)"/>
+
+  <!-- News scroll / document -->
+  <rect x="130" y="110" width="220" height="280" rx="18" fill="#1c1c1c" stroke="#2d2d2d" stroke-width="2"/>
+
+  <!-- Lines of text on scroll -->
+  <rect x="158" y="150" width="140" height="10" rx="5" fill="#58a6ff" opacity="0.9"/>
+  <rect x="158" y="175" width="164" height="8" rx="4" fill="#4a4a4a"/>
+  <rect x="158" y="196" width="148" height="8" rx="4" fill="#4a4a4a"/>
+  <rect x="158" y="217" width="156" height="8" rx="4" fill="#4a4a4a"/>
+  <rect x="158" y="245" width="120" height="8" rx="4" fill="#3a3a3a"/>
+  <rect x="158" y="264" width="140" height="8" rx="4" fill="#3a3a3a"/>
+  <rect x="158" y="283" width="132" height="8" rx="4" fill="#3a3a3a"/>
+
+  <!-- Play button circle (video generation) -->
+  <circle cx="360" cy="360" r="80" fill="#161616" stroke="#58a6ff" stroke-width="3"/>
+  <circle cx="360" cy="360" r="80" fill="#58a6ff" fill-opacity="0.08"/>
+  <!-- Play triangle -->
+  <polygon points="345,330 345,390 400,360" fill="#58a6ff"/>
+
+  <!-- Small upward arrow (TikTok upload) -->
+  <circle cx="360" cy="360" r="0" fill="none"/>
+  <line x1="418" y1="302" x2="434" y2="286" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+  <polygon points="426,278 442,278 442,294" fill="#58a6ff"/>
+</svg>
