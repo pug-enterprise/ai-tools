@@ -17,8 +17,9 @@ from bs4 import BeautifulSoup
 
 from domain.models import Article
 
-RSS_URL = "https://secure.runescape.com/m=news/latest_news.rss?oldschool=true"
-TIMEOUT = 15
+RSS_URL  = "https://secure.runescape.com/m=news/latest_news.rss?oldschool=true"
+TIMEOUT  = 15
+MIN_DATE = datetime(2026, 4, 23)  # only process articles on or after this date
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,9 @@ def fetch_articles() -> list[Article]:
         for entry in feed.entries:
             try:
                 article = _parse_entry(entry, client)
+                if article.published_at < MIN_DATE:
+                    log.debug(f"Skipping old article ({article.published_at.date()}): {article.title}")
+                    continue
                 articles.append(article)
             except Exception as e:
                 log.warning(f"Skipping entry {entry.get('link', '?')}: {e}")
