@@ -25,10 +25,21 @@ from domain.pipeline import PipelineService
 from services.video_gen import OpenArtVideoGenerator
 from services.tiktok import TikTokClient
 
+import os
+from logging.handlers import RotatingFileHandler
+
+_log_dir = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_log_file = os.path.join(_log_dir, "pipeline.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(_log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"),
+    ],
 )
 
 

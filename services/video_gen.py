@@ -134,36 +134,41 @@ class OpenArtVideoGenerator:
 def _select_character(page, name: str):
     """Click the character selector and choose by name."""
     try:
-        # Open character picker — look for a button/thumbnail labelled with the character name
-        char_btn = page.locator(f'[data-character="{name}"], img[alt="{name}"], button:has-text("{name}")')
-        if char_btn.count() == 0:
-            # Try clicking a "Character" label/tab first to reveal the list
-            char_tab = page.locator('button:has-text("Character"), [role="tab"]:has-text("Character")')
-            if char_tab.count() > 0:
-                char_tab.first.click()
-                page.wait_for_timeout(800)
-            char_btn = page.locator(f'[data-character="{name}"], img[alt="{name}"], button:has-text("{name}")')
-
-        if char_btn.count() > 0:
-            char_btn.first.click()
-            page.wait_for_timeout(500)
-            log.info(f"Character set to: {name}")
-        else:
+        img = page.locator(f'img[alt="{name}"]')
+        if img.count() == 0:
             log.warning(f"Character '{name}' not found — skipping")
+            return
+
+        # The img is hidden inside a parent clickable container — click the parent
+        img.first.evaluate("el => { const p = el.closest('button, li, [role=\"option\"], [class*=\"character\"], [class*=\"avatar\"], div[tabindex]') || el.parentElement; p.click(); }")
+        page.wait_for_timeout(600)
+        log.info(f"Character set to: {name}")
     except Exception as e:
         log.warning(f"Could not select character '{name}': {e}")
 
 
 def _select_aspect_ratio(page, ratio: str):
-    """Select aspect ratio (e.g. '9:16')."""
+    """Select aspect ratio (e.g. '9:16'). Tries multiple selector patterns."""
     try:
-        ratio_btn = page.locator(f'button:has-text("{ratio}"), [data-ratio="{ratio}"], label:has-text("{ratio}")')
-        if ratio_btn.count() > 0:
-            ratio_btn.first.click()
-            page.wait_for_timeout(500)
-            log.info(f"Aspect ratio set to: {ratio}")
-        else:
-            log.warning(f"Aspect ratio '{ratio}' not found — skipping")
+        # Try text match, aria-label, data attributes, and SVG title
+        selectors = [
+            f'button:has-text("{ratio}")',
+            f'[aria-label="{ratio}"]',
+            f'[data-ratio="{ratio}"]',
+            f'[title="{ratio}"]',
+            f'label:has-text("{ratio}")',
+            # 9:16 is portrait — some UIs label it "Portrait" or show icon
+            'button:has-text("Portrait")',
+            '[aria-label="Portrait"]',
+        ]
+        for sel in selectors:
+            btn = page.locator(sel)
+            if btn.count() > 0:
+                btn.first.click()
+                page.wait_for_timeout(500)
+                log.info(f"Aspect ratio set to: {ratio} (via '{sel}')")
+                return
+        log.warning(f"Aspect ratio '{ratio}' not found — skipping")
     except Exception as e:
         log.warning(f"Could not set aspect ratio '{ratio}': {e}")
 
