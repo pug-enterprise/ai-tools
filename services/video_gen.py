@@ -31,8 +31,8 @@ class DryRunComplete(Exception):
 STORY_URL     = "https://openart.ai/story/create/script"
 SESSION_DIR   = Path.home() / ".ai-tools" / "openart-session"
 COOKIES_FILE  = SESSION_DIR / "cookies.json"
-POLL_TIMEOUT  = 600   # seconds
-POLL_INTERVAL = 5     # seconds
+POLL_TIMEOUT  = 1800  # seconds (30 minutes)
+POLL_INTERVAL = 10    # seconds
 
 
 class VideoGenerator(Protocol):
