@@ -185,23 +185,26 @@ def _select_aspect_ratio(page, ratio: str):
 
 def _apply_visual_style(page, story_text: str):
     """
-    Click the 'Custom' style card (img[alt='Custom']), then fill the
-    'Describe the style' textarea with a story-derived prompt.
+    Click the 'Custom' style card then fill the 'Describe the style' textarea.
+    The card's clickable element is div[tabindex="0"] containing img[alt="Custom"].
     """
     try:
-        # Click the Custom card — img[alt="Custom"] inside a clickable parent
-        custom_img = page.locator('img[alt="Custom"]')
-        if custom_img.count() == 0:
+        # Target the div[tabindex="0"] that wraps the Custom card directly
+        custom_card = page.locator('div[tabindex="0"]:has(img[alt="Custom"])')
+        if custom_card.count() == 0:
             log.warning("Custom style card not found — skipping")
             return
-        custom_img.first.evaluate("el => { const p = el.closest('[tabindex], button, li, [role=\"button\"]') || el.parentElement.parentElement; p.click(); }")
+
+        custom_card.first.scroll_into_view_if_needed()
+        custom_card.first.click()
         page.wait_for_timeout(800)
 
-        # Fill the textarea that appears
-        style_input = page.locator('textarea[placeholder="Describe the style"]')
-        style_input.wait_for(timeout=5_000)
-        style_input.first.fill("")
-        style_input.first.fill(_build_style_prompt(story_text))
+        # The textarea has a default value ("photorealistic") — triple-click to select all, then type
+        style_input = page.locator('textarea[placeholder="Describe the style"]').first
+        style_input.wait_for(timeout=8_000)
+        style_input.scroll_into_view_if_needed()
+        style_input.triple_click()
+        style_input.type(_build_style_prompt(story_text))
         page.wait_for_timeout(300)
         log.info("Visual style applied")
     except Exception as e:
