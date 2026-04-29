@@ -85,8 +85,8 @@ def status():
 
     click.echo("\nRecent articles:")
     for a in articles[:20]:
-        err = f"  ✗ {a.error[:60]}" if a.error else ""
-        click.echo(f"  [{a.status:12s}] {a.title[:60]}{err}")
+        err = f"\n    ✗ {a.error[:80]}" if a.error else ""
+        click.echo(f"  [{a.status:12s}] {a.title[:55]}  ({a.id[:12]}){err}")
 
 
 @cli.command()
