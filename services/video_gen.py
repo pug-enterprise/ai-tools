@@ -219,18 +219,28 @@ def _apply_visual_style(page, story_text: str):
 MAX_STYLE_CHARS = 200
 
 def _build_style_prompt(story_text: str) -> str:
-    """Generate a style prompt capped at MAX_STYLE_CHARS."""
-    prefix = (
-        "Epic fantasy MMORPG news broadcast style. "
-        "Dark medieval aesthetic, dramatic lighting, runic textures. "
-        "Inspired by: "
+    """Ask Claude to generate a visual style prompt for this story, capped at 200 chars."""
+    from services.summarizer import _run_claude
+
+    prompt = (
+        f"Write a visual style description for an AI video generator. "
+        f"It must be under {MAX_STYLE_CHARS} characters. "
+        f"Base it on Old School RuneScape's art style (medieval fantasy, pixel-art roots, "
+        f"dark atmospheric lighting, runic textures) combined with the mood of this news story. "
+        f"Output ONLY the style description, no quotes, no explanation.\n\n"
+        f"Story summary:\n{story_text[:500]}"
     )
-    remaining = MAX_STYLE_CHARS - len(prefix)
-    keywords = story_text.replace("\n", " ").strip()[:remaining]
-    # Trim to last full word
-    if len(keywords) == remaining and " " in keywords:
-        keywords = keywords.rsplit(" ", 1)[0]
-    return prefix + keywords
+
+    try:
+        result = _run_claude(prompt).strip().strip('"').strip("'")
+        # Hard cap at MAX_STYLE_CHARS, trim to last full word
+        if len(result) > MAX_STYLE_CHARS:
+            result = result[:MAX_STYLE_CHARS].rsplit(" ", 1)[0]
+        log.info(f"AI style prompt: {result!r}")
+        return result
+    except Exception as e:
+        log.warning(f"Claude style generation failed, using fallback: {e}")
+        return "Epic fantasy MMORPG news style. Dark medieval aesthetic, dramatic lighting, runic textures, cinematic atmosphere."
 
 
 def _click_create_full_video(page):
