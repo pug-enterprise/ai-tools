@@ -169,55 +169,54 @@ def _select_character(page, name: str):
 
 
 def _select_aspect_ratio(page, ratio: str):
-    """Select aspect ratio (e.g. '9:16'). Tries multiple selector patterns."""
+    """Select aspect ratio by clicking the parent of the <p> text label."""
     try:
-        # Try text match, aria-label, data attributes, and SVG title
-        selectors = [
-            f'button:has-text("{ratio}")',
-            f'[aria-label="{ratio}"]',
-            f'[data-ratio="{ratio}"]',
-            f'[title="{ratio}"]',
-            f'label:has-text("{ratio}")',
-            # 9:16 is portrait — some UIs label it "Portrait" or show icon
-            'button:has-text("Portrait")',
-            '[aria-label="Portrait"]',
-        ]
-        for sel in selectors:
-            btn = page.locator(sel)
-            if btn.count() > 0:
-                btn.first.click()
-                page.wait_for_timeout(500)
-                log.info(f"Aspect ratio set to: {ratio} (via '{sel}')")
-                return
-        log.warning(f"Aspect ratio '{ratio}' not found — skipping")
+        # The ratio is rendered as <p ...>9:16</p> inside a clickable parent
+        p = page.locator(f'p:has-text("{ratio}")')
+        if p.count() == 0:
+            log.warning(f"Aspect ratio '{ratio}' not found — skipping")
+            return
+        p.first.evaluate("el => { const p = el.closest('button, [role=\"button\"], div[tabindex], li') || el.parentElement; p.click(); }")
+        page.wait_for_timeout(500)
+        log.info(f"Aspect ratio set to: {ratio}")
     except Exception as e:
         log.warning(f"Could not set aspect ratio '{ratio}': {e}")
 
 
 def _apply_visual_style(page, story_text: str):
     """
-    Click 'Custom' or 'Style' option and fill in a style prompt
-    derived from the story content.
+    Click the 'Custom' style card (img[alt='Custom']), then fill the
+    'Describe the style' textarea with a story-derived prompt.
     """
     try:
-        # Look for a style input or custom style option
-        style_btn = page.locator('button:has-text("Custom"), button:has-text("Style"), [placeholder*="style"]')
-        if style_btn.count() > 0:
-            style_btn.first.click()
-            page.wait_for_timeout(600)
+        # Click the Custom card — img[alt="Custom"] inside a clickable parent
+        custom_img = page.locator('img[alt="Custom"]')
+        if custom_img.count() == 0:
+            log.warning("Custom style card not found — skipping")
+            return
+        custom_img.first.evaluate("el => { const p = el.closest('[tabindex], button, li, [role=\"button\"]') || el.parentElement.parentElement; p.click(); }")
+        page.wait_for_timeout(800)
 
-        style_input = page.locator('input[placeholder*="style"], textarea[placeholder*="style"]')
-        if style_input.count() > 0:
-            # Generate a brief style prompt from the first 100 chars of story
-            keywords = story_text[:100].replace("\n", " ").strip()
-            style_prompt = f"Dynamic fantasy game news style, OSRS pixel art aesthetic, epic medieval theme — {keywords[:60]}"
-            style_input.first.fill(style_prompt)
-            page.wait_for_timeout(300)
-            log.info("Visual style applied")
-        else:
-            log.warning("Style input not found — skipping custom style")
+        # Fill the textarea that appears
+        style_input = page.locator('textarea[placeholder="Describe the style"]')
+        style_input.wait_for(timeout=5_000)
+        style_input.first.fill("")
+        style_input.first.fill(_build_style_prompt(story_text))
+        page.wait_for_timeout(300)
+        log.info("Visual style applied")
     except Exception as e:
         log.warning(f"Could not apply visual style: {e}")
+
+
+def _build_style_prompt(story_text: str) -> str:
+    """Generate a style prompt from the story summary."""
+    keywords = story_text[:120].replace("\n", " ").strip()
+    return (
+        f"Epic fantasy MMORPG news broadcast style. "
+        f"Dark medieval aesthetic, dramatic lighting, runic textures. "
+        f"Cinematic news overlay graphics. "
+        f"Inspired by: {keywords[:80]}"
+    )
 
 
 def _click_create_full_video(page):
