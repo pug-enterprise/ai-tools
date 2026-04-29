@@ -90,9 +90,12 @@ class OpenArtVideoGenerator:
 
             def handle_response(response):
                 url = response.url
+                # Only accept freshly generated production videos:
+                # pattern: cdn.openart.ai/production/<id>/video_<id>_<ts>_<ts>.mp4
                 if (
-                    "cdn.openart.ai" in url
-                    and ".mp4" in url
+                    "cdn.openart.ai/production/" in url
+                    and "/video_" in url
+                    and url.endswith(".mp4")
                     and url not in existing_urls
                 ):
                     log.info(f"New video URL captured via network: {url}")

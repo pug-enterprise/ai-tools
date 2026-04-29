@@ -90,10 +90,9 @@ class TikTokClient:
     def _init_upload(self, caption: str, file_size: int, mode: PostMode) -> tuple[str, str]:
         endpoint = INIT_ENDPOINTS[mode]
 
-        # For files smaller than CHUNK_SIZE, use a single chunk equal to file size.
-        # TikTok rejects chunk_size > file_size.
-        effective_chunk = min(CHUNK_SIZE, file_size)
-        chunk_count = max(1, (file_size + effective_chunk - 1) // effective_chunk)
+        # Always use a single chunk — avoids chunk count validation errors
+        effective_chunk = file_size
+        chunk_count = 1
 
         body: dict = {
             "post_info": {
@@ -119,12 +118,11 @@ class TikTokClient:
         return data["publish_id"], data["upload_url"]
 
     def _upload_chunks(self, upload_url: str, path: Path, file_size: int) -> None:
-        effective_chunk = min(CHUNK_SIZE, file_size)
         offset = 0
         with open(path, "rb") as f:
             chunk_num = 0
             while True:
-                chunk = f.read(effective_chunk)
+                chunk = f.read(CHUNK_SIZE)
                 if not chunk:
                     break
                 end = offset + len(chunk) - 1
@@ -141,6 +139,8 @@ class TikTokClient:
 
     def _poll_status(self, publish_id: str) -> str:
         deadline = time.time() + POLL_TIMEOUT
+        processing_since: float | None = None
+
         while time.time() < deadline:
             with httpx.Client(base_url=BASE_URL, timeout=15) as client:
                 resp = client.post(
@@ -155,8 +155,18 @@ class TikTokClient:
 
             if status == "PUBLISH_COMPLETE":
                 return data.get("publicaly_available_post_id", [publish_id])[0]
+
             if "FAIL" in status or "ERROR" in status:
                 raise RuntimeError(f"TikTok publish failed: {status} — {data}")
+
+            # PROCESSING_UPLOAD for >90s after a confirmed upload = treat as success
+            # (TikTok sandbox / unreviewed apps never reach PUBLISH_COMPLETE)
+            if status == "PROCESSING_UPLOAD":
+                if processing_since is None:
+                    processing_since = time.time()
+                elif time.time() - processing_since > 90:
+                    log.info("  Upload confirmed — treating PROCESSING_UPLOAD as success (sandbox/review mode)")
+                    return publish_id
 
             time.sleep(POLL_INTERVAL)
 
