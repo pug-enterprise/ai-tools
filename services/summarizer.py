@@ -17,9 +17,11 @@ from domain.models import Article, Summary
 
 log = logging.getLogger(__name__)
 
+MAX_SCRIPT_CHARS = 900
+
 PROMPT_TEMPLATE = """\
-Summarize this Old School RuneScape news article in 150-200 words.
-Write in present tense. Be punchy and engaging — this will be read aloud in a TikTok video.
+Summarize this Old School RuneScape news article as a voiceover script.
+Keep it under 900 characters. Write in present tense, punchy and engaging — read aloud in a TikTok video.
 Do NOT include hashtags, emojis, or "In summary".
 Start directly with the news.
 
@@ -40,10 +42,14 @@ def summarize(article: Article) -> Summary:
 
     result = _run_claude(prompt)
 
+    text = result.strip()
+    if len(text) > MAX_SCRIPT_CHARS:
+        text = text[:MAX_SCRIPT_CHARS].rsplit(" ", 1)[0]
+
     return Summary(
         id=str(uuid4()),
         article_id=article.id,
-        text=result.strip(),
+        text=text,
         created_at=datetime.utcnow(),
     )
 
