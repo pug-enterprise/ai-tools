@@ -197,14 +197,19 @@ def _apply_visual_style(page, story_text: str):
 
         custom_card.first.scroll_into_view_if_needed()
         custom_card.first.click()
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(1500)
 
-        # The textarea has a default value ("photorealistic") — triple-click to select all, then type
-        style_input = page.locator('textarea[placeholder="Describe the style"]').first
+        # Target the visible textarea (not the aria-hidden mirror)
+        style_input = page.locator('textarea[placeholder="Describe the style"]:not([aria-hidden])').first
         style_input.wait_for(timeout=8_000)
         style_input.scroll_into_view_if_needed()
-        style_input.triple_click()
-        style_input.type(_build_style_prompt(story_text))
+        style_input.click()
+        page.wait_for_timeout(200)
+        # Select all existing text and replace
+        page.keyboard.press("Meta+A")
+        page.keyboard.press("Backspace")
+        page.wait_for_timeout(100)
+        style_input.press_sequentially(_build_style_prompt(story_text), delay=20)
         page.wait_for_timeout(300)
         log.info("Visual style applied")
     except Exception as e:
