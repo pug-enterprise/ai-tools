@@ -50,25 +50,14 @@ class OpenArtVideoGenerator:
         log.info(f"Starting OpenArt.ai video generation (job={job_id})")
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False, channel="chrome")
+            browser = pw.chromium.launch(
+                headless=False,
+                channel="chrome",
+                slow_mo=300,   # visible pacing so you can follow along
+            )
             ctx = browser.new_context()
             ctx.add_cookies(json.loads(COOKIES_FILE.read_text()))
             page = ctx.new_page()
-
-            # Intercept network to capture the generated video URL directly
-            video_url_holder: dict = {}
-
-            def handle_response(response):
-                url = response.url
-                if (
-                    "cdn.openart.ai" in url
-                    and url.endswith(".mp4")
-                    and url not in video_url_holder.get("seen", set())
-                ):
-                    video_url_holder["url"] = url
-                    video_url_holder.setdefault("seen", set()).add(url)
-
-            page.on("response", handle_response)
 
             # ── Navigate fresh page ───────────────────────────────────────
             page.goto(STORY_URL, wait_until="networkidle")
@@ -79,6 +68,29 @@ class OpenArtVideoGenerator:
                 raise RuntimeError(
                     "OpenArt.ai session expired. Run: python cli.py openart-login"
                 )
+
+            # Record any video URLs already on the page BEFORE generating
+            existing_urls: set[str] = set()
+            for el in page.locator("video[src]").all():
+                src = el.get_attribute("src") or ""
+                if src:
+                    existing_urls.add(src)
+            log.info(f"Existing video URLs on page before generation: {len(existing_urls)}")
+
+            # Intercept network — only accept URLs we haven't seen before
+            video_url_holder: dict = {}
+
+            def handle_response(response):
+                url = response.url
+                if (
+                    "cdn.openart.ai" in url
+                    and ".mp4" in url
+                    and url not in existing_urls
+                ):
+                    log.info(f"New video URL captured via network: {url}")
+                    video_url_holder["url"] = url
+
+            page.on("response", handle_response)
 
             # ── Fill script ───────────────────────────────────────────────
             script_selector = 'textarea, [contenteditable="true"]'
@@ -97,10 +109,10 @@ class OpenArtVideoGenerator:
 
             # ── Click "Create full video" ─────────────────────────────────
             _click_create_full_video(page)
-            log.info("Create full video clicked — waiting for generation…")
+            log.info("Create full video clicked — waiting for generation (this may take a few minutes)…")
 
-            # ── Wait for video URL via network intercept ──────────────────
-            video_url = _wait_for_video_url(page, video_url_holder, POLL_TIMEOUT, POLL_INTERVAL)
+            # ── Wait for a NEW video URL ──────────────────────────────────
+            video_url = _wait_for_video_url(page, video_url_holder, existing_urls, POLL_TIMEOUT, POLL_INTERVAL)
 
             ctx.close()
             browser.close()
@@ -197,10 +209,10 @@ def _click_create_full_video(page):
         raise RuntimeError(f"Could not click create button: {e}")
 
 
-def _wait_for_video_url(page, holder: dict, timeout: int, interval: int) -> str:
+def _wait_for_video_url(page, holder: dict, existing_urls: set, timeout: int, interval: int) -> str:
     """
-    Wait for a new .mp4 URL captured via network intercept.
-    Falls back to DOM polling if intercept doesn't fire.
+    Wait for a NEW .mp4 URL — either via network intercept or DOM polling.
+    Ignores any video URLs that were already present before generation started.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -208,23 +220,24 @@ def _wait_for_video_url(page, holder: dict, timeout: int, interval: int) -> str:
         if holder.get("url"):
             return holder["url"]
 
-        # DOM fallback — look for a download link that appeared after generation
+        # DOM fallback — only accept URLs not in existing_urls
         try:
-            links = page.locator('a[href*=".mp4"][download], a[href*="cdn.openart.ai"]')
-            if links.count() > 0:
-                href = links.first.get_attribute("href")
-                if href and href.endswith(".mp4"):
-                    return href
-
             videos = page.locator("video[src*='cdn.openart.ai']")
-            if videos.count() > 0:
-                src = videos.first.get_attribute("src")
-                if src and src.endswith(".mp4"):
+            for i in range(videos.count()):
+                src = videos.nth(i).get_attribute("src") or ""
+                if src and src not in existing_urls:
                     return src
+
+            links = page.locator('a[href*="cdn.openart.ai"][href*=".mp4"]')
+            for i in range(links.count()):
+                href = links.nth(i).get_attribute("href") or ""
+                if href and href not in existing_urls:
+                    return href
         except Exception:
             pass
 
-        log.debug(f"Waiting for video… ({int(deadline - time.time())}s remaining)")
+        remaining = int(deadline - time.time())
+        log.info(f"Waiting for video… ({remaining}s remaining)")
         time.sleep(interval)
 
     raise TimeoutError(f"OpenArt.ai video not ready after {timeout}s")
