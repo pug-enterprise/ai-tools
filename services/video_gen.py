@@ -216,15 +216,21 @@ def _apply_visual_style(page, story_text: str):
         log.warning(f"Could not apply visual style: {e}")
 
 
+MAX_STYLE_CHARS = 200
+
 def _build_style_prompt(story_text: str) -> str:
-    """Generate a style prompt from the story summary."""
-    keywords = story_text[:120].replace("\n", " ").strip()
-    return (
-        f"Epic fantasy MMORPG news broadcast style. "
-        f"Dark medieval aesthetic, dramatic lighting, runic textures. "
-        f"Cinematic news overlay graphics. "
-        f"Inspired by: {keywords[:80]}"
+    """Generate a style prompt capped at MAX_STYLE_CHARS."""
+    prefix = (
+        "Epic fantasy MMORPG news broadcast style. "
+        "Dark medieval aesthetic, dramatic lighting, runic textures. "
+        "Inspired by: "
     )
+    remaining = MAX_STYLE_CHARS - len(prefix)
+    keywords = story_text.replace("\n", " ").strip()[:remaining]
+    # Trim to last full word
+    if len(keywords) == remaining and " " in keywords:
+        keywords = keywords.rsplit(" ", 1)[0]
+    return prefix + keywords
 
 
 def _click_create_full_video(page):
