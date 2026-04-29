@@ -11,7 +11,7 @@ from typing import Literal
 from infra.repository import ArticleRepo, SummaryRepo, VideoJobRepo, PostRepo
 from services.scraper import fetch_articles
 from services.summarizer import summarize
-from services.video_gen import VideoGenerator
+from services.video_gen import VideoGenerator, DryRunComplete
 from services.downloader import download_video
 from services.tiktok import TikTokClient
 
@@ -86,6 +86,8 @@ class PipelineService:
                 self.articles.set_status(article.id, "downloaded")
                 stats["video"] += 1
                 log.info(f"  Video ready: {local_path}")
+            except DryRunComplete as e:
+                log.info(f"  {e}")
             except Exception as e:
                 log.error(f"  Video stage failed for {article.id}: {e}")
                 self.articles.set_status(article.id, "failed", error=str(e))

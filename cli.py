@@ -43,13 +43,13 @@ logging.basicConfig(
 )
 
 
-def _build_pipeline() -> PipelineService:
+def _build_pipeline(dry_run: bool = False) -> PipelineService:
     return PipelineService(
         articles=ArticleRepo(),
         summaries=SummaryRepo(),
         video_jobs=VideoJobRepo(),
         posts=PostRepo(),
-        video_gen=OpenArtVideoGenerator(),
+        video_gen=OpenArtVideoGenerator(dry_run=dry_run),
         tiktok=TikTokClient(),
     )
 
@@ -61,15 +61,20 @@ def cli():
 
 @cli.command()
 @click.option("--draft/--publish", default=None, help="Override post mode (default: from .env)")
-def run(draft: Optional[bool]):
+@click.option("--dry-run", is_flag=True, default=False, help="Open browser and set options but don't generate video")
+def run(draft: Optional[bool], dry_run: bool):
     """Run the full pipeline once."""
     if draft is None:
         post_mode = settings.tiktok_post_mode
     else:
         post_mode = "draft" if draft else "direct"
 
-    click.echo(f"Running pipeline (post_mode={post_mode})")
-    pipeline = _build_pipeline()
+    if dry_run:
+        click.echo("Running pipeline (DRY RUN — will not generate videos)")
+    else:
+        click.echo(f"Running pipeline (post_mode={post_mode})")
+
+    pipeline = _build_pipeline(dry_run=dry_run)
     stats = pipeline.run(post_mode=post_mode)
 
     click.echo("\nResults:")

@@ -23,6 +23,11 @@ from domain.models import Summary, VideoJob
 
 log = logging.getLogger(__name__)
 
+
+class DryRunComplete(Exception):
+    """Raised when dry-run mode stops before generating a video."""
+
+
 STORY_URL     = "https://openart.ai/story/create/script"
 SESSION_DIR   = Path.home() / ".ai-tools" / "openart-session"
 COOKIES_FILE  = SESSION_DIR / "cookies.json"
@@ -37,6 +42,9 @@ class VideoGenerator(Protocol):
 
 class OpenArtVideoGenerator:
     """Playwright-based OpenArt.ai automation."""
+
+    def __init__(self, dry_run: bool = False):
+        self.dry_run = dry_run
 
     def generate(self, summary: Summary) -> VideoJob:
         from playwright.sync_api import sync_playwright
@@ -106,6 +114,19 @@ class OpenArtVideoGenerator:
 
             # ── Apply custom visual style from story content ───────────────
             _apply_visual_style(page, summary.text)
+
+            # ── Dry run — pause for inspection, don't generate ───────────────
+            if self.dry_run:
+                log.info("DRY RUN — inspect the browser, then close the window to continue.")
+                print("\n  *** DRY RUN: Check the browser — verify character, ratio, and style. ***")
+                print("  Close the browser window when done inspecting.")
+                try:
+                    page.wait_for_event("close", timeout=300_000)
+                except Exception:
+                    pass
+                ctx.close()
+                browser.close()
+                raise DryRunComplete(f"Dry run complete for article: {summary.article_id}")
 
             # ── Click "Create full video" ─────────────────────────────────
             _click_create_full_video(page)
