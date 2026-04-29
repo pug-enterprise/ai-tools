@@ -151,7 +151,7 @@ class TikTokClient:
             _raise_for_tiktok_error(resp)
             data = resp.json().get("data", {})
             status = data.get("status", "")
-            log.debug(f"  TikTok publish status: {status}")
+            log.info(f"  TikTok publish status: {status} | full: {data}")
 
             if status == "PUBLISH_COMPLETE":
                 return data.get("publicaly_available_post_id", [publish_id])[0]
