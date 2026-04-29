@@ -90,8 +90,10 @@ class TikTokClient:
     def _init_upload(self, caption: str, file_size: int, mode: PostMode) -> tuple[str, str]:
         endpoint = INIT_ENDPOINTS[mode]
 
-        # Chunk count required for TikTok's chunked upload
-        chunk_count = max(1, (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE)
+        # For files smaller than CHUNK_SIZE, use a single chunk equal to file size.
+        # TikTok rejects chunk_size > file_size.
+        effective_chunk = min(CHUNK_SIZE, file_size)
+        chunk_count = max(1, (file_size + effective_chunk - 1) // effective_chunk)
 
         body: dict = {
             "post_info": {
@@ -104,7 +106,7 @@ class TikTokClient:
             "source_info": {
                 "source": "FILE_UPLOAD",
                 "video_size": file_size,
-                "chunk_size": CHUNK_SIZE,
+                "chunk_size": effective_chunk,
                 "total_chunk_count": chunk_count,
             },
         }
@@ -117,11 +119,12 @@ class TikTokClient:
         return data["publish_id"], data["upload_url"]
 
     def _upload_chunks(self, upload_url: str, path: Path, file_size: int) -> None:
+        effective_chunk = min(CHUNK_SIZE, file_size)
         offset = 0
         with open(path, "rb") as f:
             chunk_num = 0
             while True:
-                chunk = f.read(CHUNK_SIZE)
+                chunk = f.read(effective_chunk)
                 if not chunk:
                     break
                 end = offset + len(chunk) - 1
